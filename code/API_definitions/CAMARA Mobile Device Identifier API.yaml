@@ -6,59 +6,24 @@ info:
     # Summary
 
     The Mobile Device Identifier API returns details of the physical mobile device currently being used by a specified mobile subscriber. The following information can be returned:
+     - A pairwise pseudonymous identifier (ppid) that the API Producer guaranties to be globally unique, permanent, and pairwise (different for each API consumer)
      - A unique network identifier for the specific device itself (IMEI SV and IMEI)
-     - A network identifier for the device make and model (IMEI Type Allocation Code)
+     - A network identifier for the device make and model (IMEI Type Allocation Code, TAC)
      - Device manufacturer name and model
 
-     This information can be useful in a number of scenarios, such as the following:
-     - For insurance purposes, to automatically identify a device that a customer wishes to insure
-     - For security / fraud reasons, to establish that a customer is not using a device they claim to have broken or lost
-     - For service delivery reasons, to optimise content for a particular device or OS type
+    This API processes personal user data, and users can exercise their rights through mechanisms such as opt-in and/or opt-out.
 
-    # Introduction
-
-    Mobile devices are allocated a unique identity by the manufacturer, known as the International Mobile Equipment Identity, or IMEI. The current software version (SV) of the device can be appended to this, in which case the identifier is known as the IMEI SV. This identity is signalled to the mobile network when the device connects, both to confirm that the device is not blocked, and also allow device dependent network configurations to be implemented.
-
-    The IMEI is a 15 digit integer, and the IMEI SV is a 16 digit integer:
-    - The first 8 digits are known as the Type Allocation Code (TAC), and identify the manufacturer and model of the device
-    - The following 6 digits are the serial number of the device for that TAC
-    - For IMEI, the remaining digit is a check digit
-    - For IMEI SV, the remaining two digits are the software version
-
-    TACs are issued and managed by the GSMA, and can be queried using the [GSMA IMEI database](https://www.gsma.com/aboutus/workinggroups/terminal-steering-group/imei-database).
-
-    The mobile network associates this device identifier with the mobile subscription currently using the device. The mobile subscription is defined by the Subscriber Identity Module (SIM) currently active in the mobile device. This may be a removable SIM or an eSIM. In either case, it is possible for the association between the device identifier and subscription to change - for example, when a physical SIM is transferred to another mobile device.
-
-    ![Device Identifier API Overview](https://raw.githubusercontent.com/camaraproject/DeviceIdentifier/main/documentation/API_documentation/resources/Device_Identifier_Overview.png)
-
-    The Device Identifier API allows the API consumer to obtain the IMEI and associated parameters for a specified mobile subscription identifier or equivalent. The mobile subscription can be identified using one of the following subscription identifiers:
-    - the subscription phone number (also known as MSISDN)
-    - the subscription network access identifier, which is a domain specific identifier typically allocated to devices that do not require voice / SMS connectivity
-    - the current IP address and port alloacted to the device, which must be an IPv6 or public IPv4 address
-
-    The API can be called by an application server or other 3rd party server to establish the identity of the device currently being used by the mobile subscription. The information returned will depend upon the consent that the end user (i.e. mobile subscription owner) has given for that information to be provided to the API consumer. For example, if the end user has not consented to any information about their device being given, then the API consumer will receive an error in reponse to their request. Otherwise, the information that the end user has consented to being given will be returned.
-
-    # Relevant terms and definitions
-
-    ### Device Identifier API service endpoint
-    The URL pointing to the RESTful resource of the Device Identifier API.
-
-    ### Identifier for the mobile subscription
-    At least one identifier for the mobile subscription from the following four options:
-      - Phone number (i.e. MSISDN)
-      - Network Access Identifier assigned by the mobile network operator for the device
-      - IPv6 address
-      - IPv4 address
-
+    ### Details
+    
     In scenarios where a main phone number is shared between multiple devices, each of which has its own individual "secondary" phone number (e.g. connectivity plans that let you share your airtime and data allowances with a smartwatch or eSIM-enabled tablet), the phone number passed by the API consumer will be treated as the secondary phone number, and hence the identifier returned will be that of the single device associated with that phone number (e.g. smartphone, smartwatch, or eSIM-enabled tablet). In such scenarios, the "primary" device is usually allocated the same main and secondary phone numbers, and hence providing the main phone number to the API will return the identity of the primary device (usually the smartphone) and not any associated devices.
 
+    The ppid is independent of the API producer. API producers take care that the ppid is permanent, even in case the device is e.g. sold.
+    
     ### Authorization and authentication
 
     The "Camara Security and Interoperability Profile" provides details on how a client requests an access token. Please refer to Identify and Consent Management (https://github.com/camaraproject/IdentityAndConsentManagement/) for the released version of the Profile.
 
     Which specific authorization flows are to be used will be determined during onboarding process, happening between the API Client and the Telco Operator exposing the API, taking into account the declared purpose for accessing the API, while also being subject to the prevailing legal framework dictated by local legislation.
-
-    It is important to remark that in cases where personal user data is processed by the API, and users can exercise their rights through mechanisms such as opt-in and/or opt-out, the use of 3-legged access tokens becomes mandatory. This measure ensures that the API remains in strict compliance with user privacy preferences and regulatory obligations, upholding the principles of transparency and user-centric data control.
 
     ## Handling of mobile subscription information:
 
@@ -68,7 +33,7 @@ info:
 
     ### Validation mechanism:
 
-    - The API server will determine the mobile subscription identifier (e.g. phone number) from the access token itself if that information is associated with it (i.e. 3-legged token).
+    - The API server will determine the mobile subscription identifier (e.g. phone number) from the access token if that information is associated with it (i.e. 3-legged token).
     - If the API request itself additionally includes one or more mobile subscription identifiers when using a 3-legged access token, the API will validate that the identifier(s) provided matches the one associated with the access token.
     - If there is a mismatch, the API will respond with a `403 INVALID_TOKEN_CONTEXT` error, indicating that the mobile subscription information in the request does not match the token.
 
@@ -82,16 +47,13 @@ info:
 
     # API functionality
 
-    The API defines two service endpoints:
+    The API defines service endpoint:
 
-    - `POST /retrieve-identifier` to get details about the specific device being used by a given mobile subscriber, including IMEI / IMEISV and the type of device
-    - `POST /retrieve-type` to get details only about the type (i.e. manufacturer and model) of device being used by a given mobile subscriber
+    - `POST /retrieve` to get details about the specific device being used by a given mobile subscriber, including IMEI / IMEISV and the type of device
+    
+    The API consumer must first obtain a valid OAuth2 token from the token endpoint, which is then passed as an Authorization header. 
 
-    To call either of these endpoints, the API consumer must first obtain a valid OAuth2 token from the token endpoint, which is then passed as an Authorization header. The API consumer must also pass at least one of the available mobile subscription identifiers in the body of the request.
-
-    Not all possible mobile subscription identifiers may be valid for a given network or implementation, and hence the API consumer should provide as many identifiers as are known to them. If the API consumer provides identifiers for different mobile subscriptions, the API may return an error, or it may take each identifier provided in the order specified above until it finds a valid subscription identifier.
-
-    If the authentication token is not valid, a `401 UNAUTHENTICATED` error is returned
+    If the authentication token is not valid, a `401 UNAUTHENTICATED` error is returned.
 
     If the mobile subscription parameters contain a formatting error, a `400 INVALID_ARGUMENT` error is returned.
 
@@ -99,13 +61,11 @@ info:
 
     If the end user has not consented to the API consumer getting access to the device identifier information, then a `403 PERMISSION_DENIED` error is returned.
 
-    Otherwise, a JSON object is returned containing the data the the end user has consented to sharing with the API consumer.
-    - When calling endpoint `retrieve-identifier`, the response will always contain `imei`
-    - When calling endpoint `retrieve-type`, the response will always contain `tac`
+    Otherwise, a JSON object is returned containing the data the the end user has consented to sharing with the API consumer. Which data is returned is determined by the scope.
     - Responses will also always contain a `lastChecked` field, indicating when the information provided was last confirmed to be correct
     - Other response parameters are implementation dependent
 
-    An example of a JSON response object is as follows:
+    Examples of a JSON response object are as follows:
     ```
     {
        "lastChecked": "2024-02-20T10:41:38.657Z",
@@ -117,9 +77,12 @@ info:
     }
     ```
 
-    # Further info and support
-
-    (FAQs will be added in a later version of the documentation)
+    ```
+    {
+       "lastChecked": "2024-02-20T10:41:38.657Z",
+       "pairwise": "854a9db5-3239-4cb5-82b2-71540e41ef3d"
+    }
+    ```
 
   contact:
     email: sp-dvi@lists.camaraproject.org
@@ -140,16 +103,21 @@ servers:
         description: API root, to be defined by the service provider
 
 paths:
-  "/retrieve-identifier":
+  "/retrieve":
     post:
       summary: Get details about the specific device being used by a given mobile subscriber
       description: Get details about the specific device being used by a given mobile subscriber
-      operationId: retrieveIdentifier
+      operationId: retrieve
       tags:
         - Get Device Identifiers
       security:
         - openId:
-            - device-identifier:retrieve-identifier
+            - device-identifier:pairwise
+            - device-identifier:imei
+            - device-identifier:imeisv
+            - device-identifier:tac
+            - device-identifier:model
+            - device-identifier:manufacturer
 
       parameters:
         - in: header
@@ -195,66 +163,11 @@ paths:
         "504":
           $ref: '#/components/responses/504GatewayTimeout'
 
-  "/retrieve-type":
-    post:
-      summary: Get details about the type of device being used by a given mobile subscriber
-      description: Get details about the type of device being used by a given mobile subscriber
-      operationId: retrieveType
-      tags:
-        - Get Device Identifiers
-      security:
-        - openId:
-            - device-identifier:retrieve-type
-
-      parameters:
-        - in: header
-          name: x-correlator
-          description: Correlation id for the different services
-          required: false
-          schema:
-            type: string
-
-      requestBody:
-        description: Parameters to create a new session
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/Device"
-
-      responses:
-        "200":
-          $ref: '#/components/responses/200RetrieveType'
-        "400":
-          $ref: '#/components/responses/400BadRequest'
-        "401":
-          $ref: '#/components/responses/401Unauthorized'
-        "403":
-          $ref: '#/components/responses/403Forbidden'
-        "404":
-          $ref: '#/components/responses/404NotFound'
-        "405":
-          $ref: '#/components/responses/405MethodNotAllowed'
-        "406":
-          $ref: '#/components/responses/406Unacceptable'
-        "422":
-          $ref: '#/components/responses/422UnprocessableContent'
-        "429":
-          $ref: '#/components/responses/429TooManyRequests'
-        "500":
-          $ref: '#/components/responses/500InternalServerError'
-        "502":
-          $ref: '#/components/responses/502BadGateway'
-        "503":
-          $ref: '#/components/responses/503ServiceUnavailable'
-        "504":
-          $ref: '#/components/responses/504GatewayTimeout'
-
 components:
   securitySchemes:
     openId:
       type: openIdConnect
-      openIdConnectUrl: .well-known/openid-configuration
+      openIdConnectUrl: https://{apiRoot}.well-known/openid-configuration
 
   headers:
     X-Correlator:
